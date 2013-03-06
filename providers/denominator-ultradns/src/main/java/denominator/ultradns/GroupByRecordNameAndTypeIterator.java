@@ -6,16 +6,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.jclouds.ultradns.ws.ResourceTypeToValue;
 import org.jclouds.ultradns.ws.domain.ResourceRecord;
 import org.jclouds.ultradns.ws.domain.ResourceRecordMetadata;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.PeekingIterator;
 import com.google.common.primitives.UnsignedInteger;
 
+import denominator.ResourceTypeToValue;
 import denominator.model.ResourceRecordSet;
 import denominator.model.ResourceRecordSet.Builder;
 import denominator.model.rdata.AAAAData;
@@ -30,9 +29,7 @@ import denominator.model.rdata.SRVData;
 import denominator.model.rdata.TXTData;
 
 class GroupByRecordNameAndTypeIterator implements Iterator<ResourceRecordSet<?>> {
-
     private final PeekingIterator<ResourceRecordMetadata> peekingIterator;
-    private final static BiMap<UnsignedInteger, String> valueToType = new ResourceTypeToValue().inverse();
 
     public GroupByRecordNameAndTypeIterator(Iterator<ResourceRecordMetadata> sortedIterator) {
         this.peekingIterator = peekingIterator(sortedIterator);
@@ -48,16 +45,16 @@ class GroupByRecordNameAndTypeIterator implements Iterator<ResourceRecordSet<?>>
         ResourceRecord record = peekingIterator.next().getRecord();
         Builder<Map<String, Object>> builder = ResourceRecordSet.builder()
                                                                 .name(record.getName())
-                                                                .type(valueToType.get(record.getType()))
+                                                                .type(new ResourceTypeToValue().inverse().get(record.getType()))
                                                                 .ttl(record.getTTL());
 
-        builder.add(parseRdataList(valueToType.get(record.getType()), record.getRData()));
+        builder.add(parseRdataList(record.getType(), record.getRData()));
 
         while (hasNext()) {
             ResourceRecord next = peekingIterator.peek().getRecord();
             if (fqdnAndTypeEquals(next, record)) {
                 peekingIterator.next();
-                builder.add(parseRdataList(valueToType.get(next.getType()), next.getRData()));
+                builder.add(parseRdataList(record.getType(), record.getRData()));
             } else {
                 break;
             }
@@ -74,7 +71,8 @@ class GroupByRecordNameAndTypeIterator implements Iterator<ResourceRecordSet<?>>
         return actual.getName().equals(expected.getName()) && actual.getType().equals(expected.getType());
     }
 
-    static Map<String, Object> parseRdataList(String type, List<String> parts) {
+    static Map<String, Object> parseRdataList(UnsignedInteger typeValue, List<String> parts) {
+        String type = new ResourceTypeToValue().inverse().get(typeValue);
         if ("A".equals(type)) {
             return AData.create(parts.get(0));
         } else if ("AAAA".equals(type)) {
